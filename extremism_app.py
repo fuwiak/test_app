@@ -14,7 +14,7 @@ st.title("Обнаружение экстремистского контента
 st.sidebar.header("Выбор модели и параметров")
 selected_model = st.sidebar.selectbox(
     "Выберите модель для анализа",
-    ["distiluse", "rubert-base-cased-sentence"],
+    ["rubert-base-cased-sentence"],
     index=0  # Установка 'distiluse' по умолчанию
 )
 # max_similarity = st.sidebar.slider("Порог максимального сходства", 0.0, 1.0,
