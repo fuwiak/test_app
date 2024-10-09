@@ -22,17 +22,24 @@ selected_model = st.sidebar.selectbox(
 max_similarity = 0.3
 
 # Загрузка моделей на основе выбора
+# @st.cache(allow_output_mutation=True)
+# def load_models(model_choice):
+#     models = {}
+#     if model_choice == "distiluse":
+#         models['distiluse'] = SentenceTransformer(
+#             'distiluse-base-multilingual-cased-v2')
+#     elif model_choice == "rubert-base-cased-sentence":
+#         models['rubert-base-cased-sentence'] = SentenceTransformer(
+#             'DeepPavlov/rubert-base-cased-sentence')
+#     elif model_choice == "LaBSE":
+#         models['LaBSE'] = SentenceTransformer('sentence-transformers/LaBSE')
+#     return models
 @st.cache(allow_output_mutation=True)
 def load_models(model_choice):
     models = {}
-    if model_choice == "distiluse":
-        models['distiluse'] = SentenceTransformer(
-            'distiluse-base-multilingual-cased-v2')
-    elif model_choice == "rubert-base-cased-sentence":
+    if model_choice == "rubert-base-cased-sentence":
         models['rubert-base-cased-sentence'] = SentenceTransformer(
             'DeepPavlov/rubert-base-cased-sentence')
-    elif model_choice == "LaBSE":
-        models['LaBSE'] = SentenceTransformer('sentence-transformers/LaBSE')
     return models
 
 
