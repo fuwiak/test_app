@@ -168,8 +168,17 @@ def is_extremist(text: Optional[str], max_similarity: float, model) -> Tuple[
     lower_text = text.lower()
     words = lower_text.split()
 
-    if "крым россии" in lower_text:
-        return False, "Нейтральное или положительное содержание", "крым россии", 0.0
+    # Add more neutral or positive phrases here
+    neutral_phrases = {
+        "крым россии": "Нейтральное или положительное содержание",
+        "курск это россия": "Нейтральное содержание",
+        # Add more phrases as needed
+    }
+
+    # Check for neutral or positive phrases
+    for phrase, category in neutral_phrases.items():
+        if phrase in lower_text:
+            return False, category, phrase, 0.0
 
     # Fuzzy keyword matching
     for category, keywords in extremist_keywords.items():
