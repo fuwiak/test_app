@@ -89,7 +89,7 @@ CATEGORIES = {
     "regional_problems": "Проблемы региона",
     "nationalism": "Пропагандирует национализм или превосходство определенной национальности",
     "conspiracy_theories": "Распространяет теории заговора или призывает к их распространению",
-    "geolocations": "геопозиция",
+    # "geolocations": "геопозиция",
     "others": "Другие",
     "vulgar": "Оскорбления и маты"
 }
@@ -192,7 +192,7 @@ extremist_keywords = {
 
         ],
 
-    "geolocations": result,
+    # "geolocations": result,
     "vulgar":
         ["хуй","хуйло","чмо"]
 
@@ -365,7 +365,7 @@ if st.button("Анализировать"):
 
 
 
-        if not is_relevant or is_extremist_flag is False:
+        if not is_relevant and is_extremist_flag is False:
             st.warning("Сообщение не релевантно для обнаружения экстремизма.")
         elif sentiment_category=='positive':
             st.warning("Сообщение не релевантно для обнаружения экстремизма.")
