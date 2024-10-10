@@ -6,6 +6,20 @@ from sentence_transformers import SentenceTransformer, util
 from fuzzywuzzy import fuzz
 import numpy as np
 from all_geo import GeoLocationNormalizer
+import spacy
+from dostoevsky.tokenization import RegexTokenizer
+from dostoevsky.models import FastTextSocialNetworkModel
+
+
+# Load Spacy model
+nlp = spacy.load("ru_core_news_md")
+
+# Initialize the tokenizer and sentiment model
+tokenizer = RegexTokenizer()
+sentiment_model = FastTextSocialNetworkModel(tokenizer=tokenizer)
+
+# Define the sentiment categories in the code
+required_categories: List[str] = ['positive', 'negative', 'neutral', 'skip']
 
 # Настройка страницы Streamlit
 st.set_page_config(page_title="Обнаружение экстремистского контента",
@@ -40,10 +54,26 @@ normalizer = GeoLocationNormalizer('city_codes_cis.csv', 'city_numbers.csv',
 result = normalizer.get_normalized_list()
 
 
-excluded = ["Ахнашин","хуайлай", "Камден"]
+excluded = ["Ахнашин","хуайлай", "Камден", "Байша","Нашуа"]
 
 result = [r for r in result if r not in excluded]
 result.extend(["Крым", "Курск","крым", "курск","россия", "Pоссия"])
+# List of Russian regions including Chechnya and Dagestan
+russian_regions = [
+    "Чечня",  # Chechnya
+    "Дагестан",  # Dagestan
+    "Москва",  # Moscow
+    "Санкт-Петербург",  # Saint Petersburg
+    "Татарстан",  # Tatarstan
+    "Краснодарский край",  # Krasnodar Krai
+    "Свердловская область",  # Sverdlovsk Oblast
+    "Новосибирская область",  # Novosibirsk Oblast
+    "Башкортостан",  # Bashkortostan
+    "Ростовская область"  # Rostov Oblast
+    # Add more regions as needed
+]
+result.extend(russian_regions)
+
 
 # Определение категорий и ключевых слов
 CATEGORIES = {
@@ -75,7 +105,7 @@ extremist_keywords = {
                      "свастика", "фашистский", "экстремистская символика"],
     "hatred": ["социальная рознь", "расовая рознь", "религиозная рознь",
                "вражда", "призыв к ненависти", "чтоб все сдохли",
-               "смерть русне"],
+               "смерть русне","дно"],
     "minority_aggression": ["дискриминация меньшинств", "угнетение меньшинств",
                             "ненависть к мигрантам", "этническая чистка",
                             "расовая дискриминация", "ксенофобия"],
@@ -100,7 +130,7 @@ extremist_keywords = {
                     "ваньки", "бурятосы", "свиньи", "свинорылые",
                     "асвабадители", "окупанты", "тувинский олень",
                     "кастрюлеголовые", "лугандоны", "дамбас", "буча",
-                    "на болоте", "еблан", "путин", "рабы"],
+                    "на болоте", "еблан", "рабы","хуйло"],
     "act_against_russia": ["санкции против России",
                            "бойкот российских товаров",
                            "противодействие России", "антироссийские меры",
@@ -156,7 +186,9 @@ extremist_keywords = {
            "приговор",
            "экстремизм",
            "украинский агент",
-           "организация экстремистского сообщества"
+           "организация экстремистского сообщества",
+            "враг",
+            "гавно"
 
         ],
 
@@ -167,6 +199,14 @@ extremist_keywords = {
 
 }
 
+def analyze_sentiment(text: Optional[str]) -> Dict[str, float]:
+    if not text:
+        return {category: 0.0 for category in required_categories}
+    results = sentiment_model.predict([text], k=2)[0]
+    for category in required_categories:
+        results.setdefault(category, 0.0)
+    sorted_results = {category: results[category] for category in required_categories}
+    return sorted_results
 
 def encode_categories():
     encoded_categories = {}
@@ -259,6 +299,10 @@ def is_relevant_for_extremism(message: str,
                               model) -> bool:
     lower_message = message.lower()
 
+    positive_words = ["молодец"]
+    if lower_message in positive_words or message in positive_words:
+        return False
+
     # Проверка на точное совпадение ключевых слов
     for category_keywords in extremist_keywords.values():
         if any(keyword.lower() in lower_message for keyword in
@@ -282,6 +326,15 @@ def is_relevant_for_extremism(message: str,
         if similarity > 0.9:  # Можно настроить этот порог
             return True
 
+    sentiment_result = analyze_sentiment(lower_message)
+    sentiment_category = max(sentiment_result, key=sentiment_result.get)
+
+    if sentiment_category in ['positive']:
+        return False
+
+
+
+
     return False
 
 def process_message(message: Optional[str], max_similarity: float, model) -> Tuple[str, bool, Optional[str], Optional[str], float, bool]:
@@ -302,9 +355,23 @@ if st.button("Анализировать"):
     if custom_message:
         model = list(models.values())[0]  # Получаем выбранную модель
         processed_message, is_extremist_flag, category, matching_keyword, similarity_score, is_relevant = process_message(custom_message, max_similarity, model)
+        sentiment_result = analyze_sentiment(custom_message)
+        sentiment_category = max(sentiment_result, key=sentiment_result.get)
+        if custom_message in ["Путин", "nутин"]:
+            sentiment_category='neutral'
 
-        if not is_relevant:
+
+        print(custom_message, sentiment_category)
+
+
+
+        if not is_relevant or is_extremist_flag is False:
             st.warning("Сообщение не релевантно для обнаружения экстремизма.")
+        elif sentiment_category=='positive':
+            st.warning("Сообщение не релевантно для обнаружения экстремизма.")
+        elif sentiment_category=='neutral':
+            st.warning("Сообщение не релевантно для обнаружения экстремизма.")
+
         else:
             st.write(f"**Пользовательское сообщение:** {custom_message}")
             st.write(f"**Потенциально экстремистское:** {'Да' if is_extremist_flag else 'Нет'}")
