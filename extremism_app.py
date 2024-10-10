@@ -38,7 +38,11 @@ models = load_models(selected_model)
 normalizer = GeoLocationNormalizer('city_codes_cis.csv', 'city_numbers.csv',
                                    'world_city_codes.csv')
 result = normalizer.get_normalized_list()
-result.remove("Ахнашин")
+
+
+excluded = ["Ахнашин","хуайлай", "Камден"]
+
+result = [r for r in result if r not in excluded]
 result.extend(["Крым", "Курск","крым", "курск"])
 
 # Определение категорий и ключевых слов
@@ -56,7 +60,8 @@ CATEGORIES = {
     "nationalism": "Пропагандирует национализм или превосходство определенной национальности",
     "conspiracy_theories": "Распространяет теории заговора или призывает к их распространению",
     "geolocations": "геопозиция",
-    "others": "Другие"
+    "others": "Другие",
+    "vulgar": "Оскорбления и маты"
 }
 
 extremist_keywords = {
@@ -95,7 +100,7 @@ extremist_keywords = {
                     "ваньки", "бурятосы", "свиньи", "свинорылые",
                     "асвабадители", "окупанты", "тувинский олень",
                     "кастрюлеголовые", "лугандоны", "дамбас", "буча",
-                    "на болоте"],
+                    "на болоте", "еблан", "путин"],
     "act_against_russia": ["санкции против России",
                            "бойкот российских товаров",
                            "противодействие России", "антироссийские меры",
@@ -152,9 +157,13 @@ extremist_keywords = {
            "экстремизм",
            "украинский агент",
            "организация экстремистского сообщества"
+
         ],
 
-    "geolocations": result
+    "geolocations": result,
+    "vulgar":
+        ["хуй","хуйло","чмо"]
+
 
 }
 
@@ -261,7 +270,7 @@ def is_relevant_for_extremism(message: str,
     for category_keywords in extremist_keywords.values():
         for word in words:
             for keyword in category_keywords:
-                if fuzz.ratio(word, keyword.lower()) > 80:
+                if fuzz.ratio(word, keyword.lower()) > 90:
                     return True
 
     # Проверка на семантическое сходство
