@@ -1,9 +1,11 @@
+
 import streamlit as st
 import re
 from typing import List, Dict, Tuple, Optional
 from sentence_transformers import SentenceTransformer, util
 from fuzzywuzzy import fuzz
 import numpy as np
+from all_geo import GeoLocationNormalizer
 
 # Настройка страницы Streamlit
 st.set_page_config(page_title="Обнаружение экстремистского контента",
@@ -21,19 +23,7 @@ selected_model = st.sidebar.selectbox(
 #                                    0.3, 0.01)
 max_similarity = 0.3
 
-# Загрузка моделей на основе выбора
-# @st.cache(allow_output_mutation=True)
-# def load_models(model_choice):
-#     models = {}
-#     if model_choice == "distiluse":
-#         models['distiluse'] = SentenceTransformer(
-#             'distiluse-base-multilingual-cased-v2')
-#     elif model_choice == "rubert-base-cased-sentence":
-#         models['rubert-base-cased-sentence'] = SentenceTransformer(
-#             'DeepPavlov/rubert-base-cased-sentence')
-#     elif model_choice == "LaBSE":
-#         models['LaBSE'] = SentenceTransformer('sentence-transformers/LaBSE')
-#     return models
+
 @st.cache(allow_output_mutation=True)
 def load_models(model_choice):
     models = {}
@@ -44,6 +34,12 @@ def load_models(model_choice):
 
 
 models = load_models(selected_model)
+
+normalizer = GeoLocationNormalizer('city_codes_cis.csv', 'city_numbers.csv',
+                                   'world_city_codes.csv')
+result = normalizer.get_normalized_list()
+result.remove("Ахнашин")
+result.extend(["Крым", "Курск","крым", "курск"])
 
 # Определение категорий и ключевых слов
 CATEGORIES = {
@@ -59,7 +55,7 @@ CATEGORIES = {
     "regional_problems": "Проблемы региона",
     "nationalism": "Пропагандирует национализм или превосходство определенной национальности",
     "conspiracy_theories": "Распространяет теории заговора или призывает к их распространению",
-
+    "geolocations": "геопозиция",
     "others": "Другие"
 }
 
@@ -156,7 +152,10 @@ extremist_keywords = {
            "экстремизм",
            "украинский агент",
            "организация экстремистского сообщества"
-        ]
+        ],
+
+    "geolocations": result
+
 }
 
 
@@ -246,34 +245,64 @@ def is_extremist(text: Optional[str], max_similarity: float, model) -> Tuple[
     return False, None, None, max_similarity_score
 
 
-def process_message(message: Optional[str], max_similarity: float, model) -> \
-Tuple[str, bool, Optional[str], Optional[str], float]:
+def is_relevant_for_extremism(message: str,
+                              extremist_keywords: Dict[str, List[str]],
+                              model) -> bool:
+    lower_message = message.lower()
+
+    # Проверка на точное совпадение ключевых слов
+    for category_keywords in extremist_keywords.values():
+        if any(keyword.lower() in lower_message for keyword in
+               category_keywords):
+            return True
+
+    # Проверка на нечеткое совпадение (fuzz.ratio > 0.6)
+    words = lower_message.split()
+    for category_keywords in extremist_keywords.values():
+        for word in words:
+            for keyword in category_keywords:
+                if fuzz.ratio(word, keyword.lower()) > 80:
+                    return True
+
+    # Проверка на семантическое сходство
+    message_embedding = model.encode(message)
+    for category, keywords in extremist_keywords.items():
+        category_embedding = model.encode(CATEGORIES[category])
+        similarity = util.pytorch_cos_sim(message_embedding,
+                                          category_embedding).item()
+        if similarity > 0.9:  # Можно настроить этот порог
+            return True
+
+    return False
+
+def process_message(message: Optional[str], max_similarity: float, model) -> Tuple[str, bool, Optional[str], Optional[str], float, bool]:
     if message is None or message.strip() == "":
-        return "", False, None, None, 0.0
+        return "", False, None, None, 0.0, False
 
-    is_extremist_flag, category, matching_keyword, similarity_score = is_extremist(
-        message, max_similarity, model)
-    return message, is_extremist_flag, category, matching_keyword, similarity_score
+    is_relevant = is_relevant_for_extremism(message, extremist_keywords, model)
+    if not is_relevant:
+        return message, False, None, None, 0.0, False
 
-
+    is_extremist_flag, category, matching_keyword, similarity_score = is_extremist(message, max_similarity, model)
+    return message, is_extremist_flag, category, matching_keyword, similarity_score, True
 # Основное приложение Streamlit
 custom_message = st.text_area(
     "Введите пользовательское сообщение для проверки качества модели:")
 
 if st.button("Анализировать"):
     if custom_message:
-        model = list(models.values())[0]  # Get the selected model
-        processed_message, is_extremist_flag, category, matching_keyword, similarity_score = process_message(
-            custom_message, max_similarity, model)
+        model = list(models.values())[0]  # Получаем выбранную модель
+        processed_message, is_extremist_flag, category, matching_keyword, similarity_score, is_relevant = process_message(custom_message, max_similarity, model)
 
-        st.write(f"**Пользовательское сообщение:** {custom_message}")
-        st.write(
-            f"**Потенциально экстремистское:** {'Да' if is_extremist_flag else 'Нет'}")
-        st.write(f"**Категория:** {category}")
-        st.write(f"**Совпадающее ключевое слово:** {matching_keyword}")
-        st.write(f"**Оценка сходства:** {similarity_score:.4f}")
+        if not is_relevant:
+            st.warning("Сообщение не релевантно для обнаружения экстремизма.")
+        else:
+            st.write(f"**Пользовательское сообщение:** {custom_message}")
+            st.write(f"**Потенциально экстремистское:** {'Да' if is_extremist_flag else 'Нет'}")
+            st.write(f"**Категория:** {category}")
+            st.write(f"**Совпадающее ключевое слово:** {matching_keyword}")
+            st.write(f"**Оценка сходства:** {similarity_score:.4f}")
 
         st.markdown("---")
     else:
         st.warning("Пожалуйста, введите сообщение для анализа.")
-
